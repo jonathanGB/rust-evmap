@@ -1,10 +1,4 @@
-use std::hash::{BuildHasher, Hash};
-
-#[cfg(not(feature = "hashbrown"))]
-use std::collections::HashMap;
-
-#[cfg(feature = "hashbrown")]
-use hashbrown::HashMap;
+use std::collections::BTreeMap;
 
 #[cfg(not(feature = "smallvec"))]
 pub(crate) type Values<T> = Vec<T>;
@@ -12,51 +6,37 @@ pub(crate) type Values<T> = Vec<T>;
 #[cfg(feature = "smallvec")]
 pub(crate) type Values<T> = smallvec::SmallVec<[T; 1]>;
 
-pub(crate) struct Inner<K, V, M, S>
+pub(crate) struct Inner<K, V, M>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
 {
-    pub(crate) data: HashMap<K, Values<V>, S>,
+    pub(crate) data: BTreeMap<K, Values<V>>,
     pub(crate) meta: M,
     ready: bool,
 }
 
-impl<K, V, M, S> Clone for Inner<K, V, M, S>
+impl<K, V, M> Clone for Inner<K, V, M>
 where
-    K: Eq + Hash + Clone,
-    S: BuildHasher + Clone,
+    K: Ord,
     M: Clone,
 {
     fn clone(&self) -> Self {
         assert!(self.data.is_empty());
         Inner {
-            data: HashMap::with_capacity_and_hasher(
-                self.data.capacity(),
-                self.data.hasher().clone(),
-            ),
+            data: BTreeMap::new(),
             meta: self.meta.clone(),
             ready: self.ready,
         }
     }
 }
 
-impl<K, V, M, S> Inner<K, V, M, S>
+impl<K, V, M> Inner<K, V, M>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
 {
-    pub fn with_hasher(m: M, hash_builder: S) -> Self {
+    pub fn with_meta(m: M) -> Self {
         Inner {
-            data: HashMap::with_hasher(hash_builder),
-            meta: m,
-            ready: false,
-        }
-    }
-
-    pub fn with_capacity_and_hasher(m: M, capacity: usize, hash_builder: S) -> Self {
-        Inner {
-            data: HashMap::with_capacity_and_hasher(capacity, hash_builder),
+            data: BTreeMap::default(),
             meta: m,
             ready: false,
         }

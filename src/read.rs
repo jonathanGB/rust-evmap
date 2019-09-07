@@ -2,8 +2,6 @@ use crate::inner::{Inner, Values};
 
 use std::borrow::Borrow;
 use std::cell;
-use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hash};
 use std::iter::{self, FromIterator};
 use std::marker::PhantomData;
 use std::mem;
@@ -16,12 +14,11 @@ use std::sync::{self, Arc};
 /// Note that any changes made to the map will not be made visible until the writer calls
 /// `refresh()`. In other words, all operations performed on a `ReadHandle` will *only* see writes
 /// to the map that preceeded the last call to `refresh()`.
-pub struct ReadHandle<K, V, M = (), S = RandomState>
+pub struct ReadHandle<K, V, M = ()>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
 {
-    pub(crate) inner: sync::Arc<AtomicPtr<Inner<K, V, M, S>>>,
+    pub(crate) inner: sync::Arc<AtomicPtr<Inner<K, V, M>>>,
     pub(crate) epochs: crate::Epochs,
     epoch: sync::Arc<sync::atomic::AtomicUsize>,
     my_epoch: sync::atomic::AtomicUsize,
@@ -41,19 +38,17 @@ where
 /// additional external locking to synchronize access to the non-`Sync` `ReadHandle` type. Note
 /// that this _internally_ takes a lock whenever you call [`ReadHandleFactory::handle`], so
 /// you should not expect producing new handles rapidly to scale well.
-pub struct ReadHandleFactory<K, V, M = (), S = RandomState>
+pub struct ReadHandleFactory<K, V, M = ()>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
 {
-    inner: sync::Arc<AtomicPtr<Inner<K, V, M, S>>>,
+    inner: sync::Arc<AtomicPtr<Inner<K, V, M>>>,
     epochs: crate::Epochs,
 }
 
-impl<K, V, M, S> Clone for ReadHandleFactory<K, V, M, S>
+impl<K, V, M> Clone for ReadHandleFactory<K, V, M>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
 {
     fn clone(&self) -> Self {
         Self {
@@ -63,13 +58,12 @@ where
     }
 }
 
-impl<K, V, M, S> ReadHandleFactory<K, V, M, S>
+impl<K, V, M> ReadHandleFactory<K, V, M>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
 {
     /// Produce a new [`ReadHandle`] to the same map as this factory was originally produced from.
-    pub fn handle(&self) -> ReadHandle<K, V, M, S> {
+    pub fn handle(&self) -> ReadHandle<K, V, M> {
         ReadHandle::new(
             sync::Arc::clone(&self.inner),
             sync::Arc::clone(&self.epochs),
@@ -77,10 +71,9 @@ where
     }
 }
 
-impl<K, V, M, S> Clone for ReadHandle<K, V, M, S>
+impl<K, V, M> Clone for ReadHandle<K, V, M>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
 {
     fn clone(&self) -> Self {
         ReadHandle::new(
@@ -90,24 +83,22 @@ where
     }
 }
 
-pub(crate) fn new<K, V, M, S>(
-    inner: Inner<K, V, M, S>,
+pub(crate) fn new<K, V, M>(
+    inner: Inner<K, V, M>,
     epochs: crate::Epochs,
-) -> ReadHandle<K, V, M, S>
+) -> ReadHandle<K, V, M>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
 {
     let store = Box::into_raw(Box::new(inner));
     ReadHandle::new(sync::Arc::new(AtomicPtr::new(store)), epochs)
 }
 
-impl<K, V, M, S> ReadHandle<K, V, M, S>
+impl<K, V, M> ReadHandle<K, V, M>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
 {
-    fn new(inner: sync::Arc<AtomicPtr<Inner<K, V, M, S>>>, epochs: crate::Epochs) -> Self {
+    fn new(inner: sync::Arc<AtomicPtr<Inner<K, V, M>>>, epochs: crate::Epochs) -> Self {
         // tell writer about our epoch tracker
         let epoch = sync::Arc::new(atomic::AtomicUsize::new(0));
         epochs.lock().unwrap().push(Arc::clone(&epoch));
@@ -123,7 +114,7 @@ where
 
     /// Create a new `Sync` type that can produce additional `ReadHandle`s for use in other
     /// threads.
-    pub fn factory(&self) -> ReadHandleFactory<K, V, M, S> {
+    pub fn factory(&self) -> ReadHandleFactory<K, V, M> {
         ReadHandleFactory {
             inner: sync::Arc::clone(&self.inner),
             epochs: sync::Arc::clone(&self.epochs),
@@ -131,15 +122,14 @@ where
     }
 }
 
-impl<K, V, M, S> ReadHandle<K, V, M, S>
+impl<K, V, M> ReadHandle<K, V, M>
 where
-    K: Eq + Hash,
-    S: BuildHasher,
+    K: Ord,
     M: Clone,
 {
     fn with_handle<F, T>(&self, f: F) -> Option<T>
     where
-        F: FnOnce(&Inner<K, V, M, S>) -> T,
+        F: FnOnce(&Inner<K, V, M>) -> T,
     {
         // once we update our epoch, the writer can no longer do a swap until we set the MSB to
         // indicate that we've finished our read. however, we still need to deal with the case of a
@@ -210,7 +200,7 @@ where
     where
         F: FnOnce(&Values<V>) -> T,
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Ord,
     {
         self.with_handle(move |inner| {
             if !inner.is_ready() {
@@ -237,7 +227,7 @@ where
     where
         F: FnOnce(&[V]) -> T,
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Ord,
     {
         // call `borrow` here to monomorphize `get_raw` fewer times
         self.get_raw(key.borrow(), |values| then(&**values))
@@ -259,7 +249,7 @@ where
     where
         F: FnOnce(&[V]) -> T,
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Ord,
     {
         self.with_handle(move |inner| {
             if !inner.is_ready() {
@@ -287,7 +277,7 @@ where
     pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Ord,
     {
         self.with_handle(move |inner| inner.data.contains_key(key))
             .unwrap_or(false)

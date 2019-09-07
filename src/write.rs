@@ -2,17 +2,11 @@ use super::{Operation, Predicate, ShallowCopy};
 use crate::inner::{Inner, Values};
 use crate::read::ReadHandle;
 
-use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hash};
 use std::sync::atomic;
 use std::sync::{Arc, MutexGuard};
 use std::{mem, thread};
 
-#[cfg(feature = "hashbrown")]
-use hashbrown::hash_map::Entry;
-
-#[cfg(not(feature = "hashbrown"))]
-use std::collections::hash_map::Entry;
+use std::collections::btree_map::Entry;
 
 /// A handle that may be used to modify the eventually consistent map.
 ///
@@ -47,32 +41,30 @@ use std::collections::hash_map::Entry;
 /// assert_eq!(r.get_and(&x.0, |rs| rs.len()), Some(1));
 /// assert_eq!(r.get_and(&x.0, |rs| rs.iter().any(|v| v.0 == x.0 && v.1 == x.1)), Some(true));
 /// ```
-pub struct WriteHandle<K, V, M = (), S = RandomState>
+pub struct WriteHandle<K, V, M = ()>
 where
-    K: Eq + Hash + Clone,
-    S: BuildHasher + Clone,
+    K: Ord + Clone,
     V: Eq + ShallowCopy,
     M: 'static + Clone,
 {
     epochs: crate::Epochs,
-    w_handle: Option<Box<Inner<K, V, M, S>>>,
+    w_handle: Option<Box<Inner<K, V, M>>>,
     oplog: Vec<Operation<K, V>>,
     swap_index: usize,
-    r_handle: ReadHandle<K, V, M, S>,
+    r_handle: ReadHandle<K, V, M>,
     last_epochs: Vec<usize>,
     meta: M,
     first: bool,
     second: bool,
 }
 
-pub(crate) fn new<K, V, M, S>(
-    w_handle: Inner<K, V, M, S>,
+pub(crate) fn new<K, V, M>(
+    w_handle: Inner<K, V, M>,
     epochs: crate::Epochs,
-    r_handle: ReadHandle<K, V, M, S>,
-) -> WriteHandle<K, V, M, S>
+    r_handle: ReadHandle<K, V, M>,
+) -> WriteHandle<K, V, M>
 where
-    K: Eq + Hash + Clone,
-    S: BuildHasher + Clone,
+    K: Ord + Clone,
     V: Eq + ShallowCopy,
     M: 'static + Clone,
 {
@@ -90,10 +82,9 @@ where
     }
 }
 
-impl<K, V, M, S> Drop for WriteHandle<K, V, M, S>
+impl<K, V, M> Drop for WriteHandle<K, V, M>
 where
-    K: Eq + Hash + Clone,
-    S: BuildHasher + Clone,
+    K: Ord + Clone,
     V: Eq + ShallowCopy,
     M: 'static + Clone,
 {
@@ -129,7 +120,7 @@ where
         // since the two maps are exactly equal, we need to make sure that we *don't* call the
         // destructors of any of the values that are in our map, as they'll all be called when the
         // last read handle goes out of scope.
-        for (_, mut vs) in self.w_handle.as_mut().unwrap().data.drain() {
+        for (_, vs) in self.w_handle.as_mut().unwrap().data.iter_mut() {
             #[cfg(not(feature = "smallvec"))]
             let drain = vs.drain(..);
 
@@ -148,10 +139,9 @@ where
     }
 }
 
-impl<K, V, M, S> WriteHandle<K, V, M, S>
+impl<K, V, M> WriteHandle<K, V, M>
 where
-    K: Eq + Hash + Clone,
-    S: BuildHasher + Clone,
+    K: Ord + Clone,
     V: Eq + ShallowCopy,
     M: 'static + Clone,
 {
@@ -480,7 +470,7 @@ where
     }
 
     /// Apply ops in such a way that no values are dropped, only forgotten
-    fn apply_first(inner: &mut Inner<K, V, M, S>, op: &mut Operation<K, V>) {
+    fn apply_first(inner: &mut Inner<K, V, M>, op: &mut Operation<K, V>) {
         match *op {
             Operation::Replace(ref key, ref mut value) => {
                 let vs = inner.data.entry(key.clone()).or_insert_with(Values::new);
@@ -589,7 +579,7 @@ where
     }
 
     /// Apply operations while allowing dropping of values
-    fn apply_second(inner: &mut Inner<K, V, M, S>, op: Operation<K, V>) {
+    fn apply_second(inner: &mut Inner<K, V, M>, op: Operation<K, V>) {
         match op {
             Operation::Replace(key, value) => {
                 let v = inner.data.entry(key).or_insert_with(Values::new);
@@ -659,10 +649,9 @@ where
     }
 }
 
-impl<K, V, M, S> Extend<(K, V)> for WriteHandle<K, V, M, S>
+impl<K, V, M> Extend<(K, V)> for WriteHandle<K, V, M>
 where
-    K: Eq + Hash + Clone,
-    S: BuildHasher + Clone,
+    K: Ord + Clone,
     V: Eq + ShallowCopy,
     M: 'static + Clone,
 {
@@ -675,14 +664,13 @@ where
 
 // allow using write handle for reads
 use std::ops::Deref;
-impl<K, V, M, S> Deref for WriteHandle<K, V, M, S>
+impl<K, V, M> Deref for WriteHandle<K, V, M>
 where
-    K: Eq + Hash + Clone,
-    S: BuildHasher + Clone,
+    K: Ord + Clone,
     V: Eq + ShallowCopy,
     M: 'static + Clone,
 {
-    type Target = ReadHandle<K, V, M, S>;
+    type Target = ReadHandle<K, V, M>;
     fn deref(&self) -> &Self::Target {
         &self.r_handle
     }

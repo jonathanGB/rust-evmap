@@ -134,7 +134,6 @@ fn main() {
     // finally, benchmark evmap
     {
         let (r, w) = evmap::Options::default()
-            .with_capacity(5_000_000)
             .construct();
         let w = sync::Arc::new(parking_lot::Mutex::new((w, 0, refresh)));
         let start = time::Instant::now();
