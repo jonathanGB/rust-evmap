@@ -5,6 +5,7 @@ use std::cell;
 use std::iter::{self, FromIterator};
 use std::marker::PhantomData;
 use std::mem;
+use std::ops::RangeBounds;
 use std::sync::atomic;
 use std::sync::atomic::AtomicPtr;
 use std::sync::{self, Arc};
@@ -83,10 +84,7 @@ where
     }
 }
 
-pub(crate) fn new<K, V, M>(
-    inner: Inner<K, V, M>,
-    epochs: crate::Epochs,
-) -> ReadHandle<K, V, M>
+pub(crate) fn new<K, V, M>(inner: Inner<K, V, M>, epochs: crate::Epochs) -> ReadHandle<K, V, M>
 where
     K: Ord,
 {
@@ -231,6 +229,33 @@ where
     {
         // call `borrow` here to monomorphize `get_raw` fewer times
         self.get_raw(key.borrow(), |values| then(&**values))
+    }
+
+    /// Applies a function to the range of values corresonding to the given range.
+    pub fn get_range<Q: ?Sized, F, T, R>(&self, range: R, then: F) -> Option<Vec<T>>
+    where
+        F: Fn(&Values<V>) -> T,
+        K: Borrow<Q>,
+        R: RangeBounds<Q>,
+        Q: Ord,
+    {
+        self.with_handle(move |inner| {
+            if !inner.is_ready() {
+                None
+            } else {
+                let results: Vec<T> = inner
+                    .data
+                    .range(range)
+                    .map(|(_, result)| then(result))
+                    .collect();
+                if results.is_empty() {
+                    None
+                } else {
+                    Some(results)
+                }
+            }
+        })
+        .unwrap_or(None)
     }
 
     /// Applies a function to the values corresponding to the key, and returns the result alongside

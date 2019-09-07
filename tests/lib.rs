@@ -449,3 +449,20 @@ fn retain() {
 
     r.get_and(&0, |nums| assert_eq!(v, nums)).unwrap();
 }
+
+#[test]
+fn range() {
+    let (r, mut w) = evmap::new();
+
+    for i in 0..50 {
+        w.insert(i, i);
+    }
+
+    assert_eq!(r.get_range(10..20, |result| result.len()), None);
+
+    w.refresh();
+
+    let results = r.get_range(20..30, |result| result.len()).unwrap();
+    assert_eq!(results.len(), 10);
+    assert_eq!(results, vec![1; 10]);
+}
