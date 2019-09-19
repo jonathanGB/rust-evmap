@@ -471,6 +471,7 @@ where
         self.add_op(Operation::Reserve(k, additional))
     }
 
+    #[cfg(feature = "indexed")]
     /// Remove the value-set for a key at a specified index.
     ///
     /// This is effectively random removal.
