@@ -197,14 +197,6 @@
 //! ```
 //!
 //! in the `evmap` dependency entry, and `Vec` will always be used internally.
-//!
-//! Note that this will also opt out of the `hashbrown` dependency, which is usually preferred,
-//! so add that back with:
-//!
-//! ```toml
-//! features = ["hashbrown"]
-//! ```
-//!
 #![deny(missing_docs)]
 
 use std::fmt;
@@ -262,6 +254,9 @@ pub enum Operation<K, V> {
     Remove(K, V),
     /// Remove the value set for this key.
     Empty(K),
+    #[cfg(feature = "indexed")]
+    /// Drop a key at a random index
+    EmptyRandom(usize),
     /// Remove all values in the value set for this key.
     Clear(K),
     /// Remove all values for all keys.
@@ -281,8 +276,11 @@ pub enum Operation<K, V> {
     ///
     /// This can improve performance by pre-allocating space for large value-sets.
     Reserve(K, usize),
-    
-    // TODO: range query?
+    // Since we have a feature that adds an enum variant, features are only additive (as they need
+    // to be) if users never try to exhaustively match on this enum. Once rust-lang/rust#44109
+    // lands, we'll have a more standard way to do this, but for now we rely on this trick:
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 mod write;
