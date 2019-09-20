@@ -288,6 +288,29 @@ where
         .unwrap_or(None)
     }
 
+    /// Get meta and range query.
+    pub fn meta_get_range_and<Q: ?Sized, F, T, R>(&self, range: R, then: F) -> Option<(Option<Vec<T>>, M)>
+    where
+        F: Fn(&Values<V>) -> T,
+        K: Borrow<Q>,
+        R: RangeBounds<Q>,
+        Q: Ord,
+    {
+        self.with_handle(move |inner| {
+            if !inner.is_ready() {
+                None
+            } else {
+                let res : Vec<T> = inner.data
+                    .range(range)
+                    .map(|(_, result)| then(result))
+                    .collect();
+                let res = (Some(res), inner.meta.clone());
+                Some(res)
+            }
+        })
+        .unwrap_or(None)
+    }
+
     /// If the writer has destroyed this map, this method will return true.
     ///
     /// See `WriteHandle::destroy`.
