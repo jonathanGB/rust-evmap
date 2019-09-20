@@ -234,7 +234,7 @@ where
     /// Applies a function to the range of values corresonding to the given range.
     pub fn get_range<Q: ?Sized, F, T, R>(&self, range: R, then: F) -> Option<Vec<T>>
     where
-        F: Fn(&Values<V>) -> T,
+        F: Fn(&[V]) -> T,
         K: Borrow<Q>,
         R: RangeBounds<Q>,
         Q: Ord,
@@ -291,7 +291,7 @@ where
     /// Get meta and range query.
     pub fn meta_get_range_and<Q: ?Sized, F, T, R>(&self, range: R, then: F) -> Option<(Option<Vec<T>>, M)>
     where
-        F: Fn(&Values<V>) -> T,
+        F: Fn(&[V]) -> T,
         K: Borrow<Q>,
         R: RangeBounds<Q>,
         Q: Ord,
