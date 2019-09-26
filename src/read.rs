@@ -304,7 +304,8 @@ where
                     .range(range)
                     .map(|(_, result)| then(result))
                     .collect();
-                let res = (Some(res), inner.meta.clone());
+                let res = if res.is_empty() { None } else { Some(res) };
+                let res = (res, inner.meta.clone());
                 Some(res)
             }
         })
