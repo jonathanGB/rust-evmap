@@ -289,7 +289,7 @@ where
     }
 
     /// Get meta and range query.
-    pub fn meta_get_range_and<'a, Q: ?Sized, F, T, P, R>(&self, range: R, take_while_predicate: &'a P, then: F) -> Option<(Option<Vec<T>>, M)>
+    pub fn meta_get_range_and<Q: ?Sized, F, T, P, R>(&self, range: R, take_while_predicate: P, then: F) -> Option<(Option<Vec<T>>, M)>
     where
         F: Fn(&[V]) -> T,
         K: Borrow<Q>,
