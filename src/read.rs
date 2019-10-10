@@ -289,21 +289,25 @@ where
     }
 
     /// Get meta and range query.
-    pub fn meta_get_range_and<Q: ?Sized, F, T, R>(&self, range: R, then: F) -> Option<(Option<Vec<T>>, M)>
+    pub fn meta_get_range_and<Q: ?Sized, F, T, P, R>(&self, range: R, take_while_predicate: P, then: F) -> Option<(Option<Vec<T>>, M)>
     where
         F: Fn(&[V]) -> T,
         K: Borrow<Q>,
         R: RangeBounds<Q>,
         Q: Ord,
+        P: Fn(&(&K, &smallvec::SmallVec<[V; 1]>)) -> bool,
     {
         self.with_handle(move |inner| {
             if !inner.is_ready() {
                 None
             } else {
                 let res : Vec<T> = inner.data
-                    .range(range)
-                    .map(|(_, result)| then(result))
-                    .collect();
+                .range(range)
+                .take_while(take_while_predicate)
+                .map(|(_, result)| then(result))
+                .collect();
+
+                    
                 let res = if res.is_empty() { None } else { Some(res) };
                 let res = (res, inner.meta.clone());
                 Some(res)
