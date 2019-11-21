@@ -123,17 +123,16 @@ where
         // since the two maps are exactly equal, we need to make sure that we *don't* call the
         // destructors of any of the values that are in our map, as they'll all be called when the
         // last read handle goes out of scope.
-        for (_, vs) in self.w_handle.as_mut().unwrap().data.iter_mut() {
-            #[cfg(not(feature = "smallvec"))]
-            let drain = vs.drain(..);
-
-            #[cfg(feature = "smallvec")]
-            let drain = vs.drain();
-
-            for v in drain {
+        
+        // TODO(jonathangb): B-Tree maps don't have a `drain` method, so we use `iter_mut`. Is
+        // it really functionally equivalent?
+        for (_, vs) in w_handle.iter_mut() {
+            for v in vs.drain(..) {
                 mem::forget(v);
             }
         }
+
+        // TODO(jonathangb): Should we clear the interval tree as well?
 
         // then we drop r_handle, which will free all the records. this is safe, since we know that
         // no readers are using this pointer anymore (due to the .wait() following swapping the

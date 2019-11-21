@@ -51,6 +51,24 @@ fn it_works() {
 }
 
 #[test]
+#[cfg(not(miri))]
+// https://github.com/rust-lang/miri/issues/658
+fn paniced_reader_doesnt_block_writer() {
+    let (r, mut w) = evmap::new();
+    w.insert(1, "a");
+    w.refresh();
+
+    // reader panics
+    let r = std::panic::catch_unwind(move || r.get_and(&1, |_| panic!()));
+    assert!(r.is_err());
+
+    // writer should still be able to continue
+    w.insert(1, "b");
+    w.refresh();
+    w.refresh();
+}
+
+#[test]
 fn read_after_drop() {
     let x = ('x', 42);
 
@@ -79,14 +97,17 @@ fn clone_types() {
 }
 
 #[test]
+#[cfg(not(miri))]
 fn busybusybusy_fast() {
     busybusybusy_inner(false);
 }
 #[test]
+#[cfg(not(miri))]
 fn busybusybusy_slow() {
     busybusybusy_inner(true);
 }
 
+#[cfg(not(miri))]
 fn busybusybusy_inner(slow: bool) {
     use std::thread;
     use std::time;
@@ -138,6 +159,7 @@ fn busybusybusy_inner(slow: bool) {
 }
 
 #[test]
+#[cfg(not(miri))]
 fn busybusybusy_heap() {
     use std::thread;
 
@@ -414,6 +436,7 @@ fn map_into() {
 }
 
 #[test]
+#[cfg(not(miri))]
 fn clone_churn() {
     use std::thread;
     let (r, mut w) = evmap::new();
