@@ -2,6 +2,7 @@ use super::{Operation, Predicate, ShallowCopy};
 use crate::inner::{Inner, Values};
 use crate::read::ReadHandle;
 
+use std::ops::Bound;
 use std::sync::atomic;
 use std::sync::{Arc, MutexGuard};
 use std::{mem, thread};
@@ -369,6 +370,15 @@ where
         self.add_op(Operation::Add(k, v))
     }
 
+    /// Add the list of `records` to the value-set, which are assumed to have a key part of the `range`.
+    /// The `range` is then also inserted to the underlying interval tree, to keep track
+    /// of which intervals are covered by the evmap.
+    /// 
+    /// The update value-set will only be visible to readers after the next call to `refresh()`.
+    pub fn insert_range(&mut self, records: Vec<(K,V)>, range: (Bound<K>, Bound<K>)) -> &mut Self {
+        self.add_op(Operation::AddRange(records, range))
+    }
+
     /// Replace the value-set of the given key with the given value.
     ///
     /// With the `smallvec` feature enabled, replacing the value will automatically
@@ -526,6 +536,17 @@ where
                     .or_insert_with(Values::new)
                     .push(unsafe { value.shallow_copy() });
             }
+            Operation::AddRange(ref mut records, ref range) => {
+                for (ref key, value) in records {
+                    inner
+                        .data
+                        .entry(key.clone())
+                        .or_insert_with(Values::new)
+                        .push(unsafe { value.shallow_copy() });
+                }
+
+                inner.tree.insert(range.clone());
+            }
             Operation::Empty(ref key) => {
                 #[cfg(not(feature = "indexed"))]
                 let rm = inner.data.remove(key);
@@ -637,6 +658,17 @@ where
                     .entry(key)
                     .or_insert_with(Values::new)
                     .push(value);
+            }
+            Operation::AddRange(records, range) => {
+                for (key, value) in records {
+                    inner
+                        .data
+                        .entry(key)
+                        .or_insert_with(Values::new)
+                        .push(value);
+                }
+
+                inner.tree.insert(range);
             }
             Operation::Empty(key) => {
                 #[cfg(not(feature = "indexed"))]

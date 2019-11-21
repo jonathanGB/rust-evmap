@@ -1,3 +1,4 @@
+use crate::RangeLookup;
 use crate::inner::{Inner, Values};
 
 use std::borrow::Borrow;
@@ -17,7 +18,7 @@ use std::sync::{self, Arc};
 /// to the map that preceeded the last call to `refresh()`.
 pub struct ReadHandle<K, V, M = ()>
 where
-    K: Ord,
+    K: Ord + Clone,
 {
     pub(crate) inner: sync::Arc<AtomicPtr<Inner<K, V, M>>>,
     pub(crate) epochs: crate::Epochs,
@@ -41,7 +42,7 @@ where
 /// you should not expect producing new handles rapidly to scale well.
 pub struct ReadHandleFactory<K, V, M = ()>
 where
-    K: Ord,
+    K: Ord + Clone,
 {
     inner: sync::Arc<AtomicPtr<Inner<K, V, M>>>,
     epochs: crate::Epochs,
@@ -49,7 +50,7 @@ where
 
 impl<K, V, M> Clone for ReadHandleFactory<K, V, M>
 where
-    K: Ord,
+    K: Ord + Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -61,7 +62,7 @@ where
 
 impl<K, V, M> ReadHandleFactory<K, V, M>
 where
-    K: Ord,
+    K: Ord + Clone,
 {
     /// Produce a new [`ReadHandle`] to the same map as this factory was originally produced from.
     pub fn handle(&self) -> ReadHandle<K, V, M> {
@@ -74,7 +75,7 @@ where
 
 impl<K, V, M> Clone for ReadHandle<K, V, M>
 where
-    K: Ord,
+    K: Ord + Clone,
 {
     fn clone(&self) -> Self {
         ReadHandle::new(
@@ -86,7 +87,7 @@ where
 
 pub(crate) fn new<K, V, M>(inner: Inner<K, V, M>, epochs: crate::Epochs) -> ReadHandle<K, V, M>
 where
-    K: Ord,
+    K: Ord + Clone,
 {
     let store = Box::into_raw(Box::new(inner));
     ReadHandle::new(sync::Arc::new(AtomicPtr::new(store)), epochs)
@@ -94,7 +95,7 @@ where
 
 impl<K, V, M> ReadHandle<K, V, M>
 where
-    K: Ord,
+    K: Ord + Clone,
 {
     fn new(inner: sync::Arc<AtomicPtr<Inner<K, V, M>>>, epochs: crate::Epochs) -> Self {
         // tell writer about our epoch tracker
@@ -122,7 +123,7 @@ where
 
 impl<K, V, M> ReadHandle<K, V, M>
 where
-    K: Ord,
+    K: Ord + Clone,
     M: Clone,
 {
     fn with_handle<F, T>(&self, f: F) -> Option<T>
@@ -231,33 +232,6 @@ where
         self.get_raw(key.borrow(), |values| then(&**values))
     }
 
-    /// Applies a function to the range of values corresonding to the given range.
-    pub fn get_range<Q: ?Sized, F, T, R>(&self, range: R, then: F) -> Option<Vec<T>>
-    where
-        F: Fn(&[V]) -> T,
-        K: Borrow<Q>,
-        R: RangeBounds<Q>,
-        Q: Ord,
-    {
-        self.with_handle(move |inner| {
-            if !inner.is_ready() {
-                None
-            } else {
-                let results: Vec<T> = inner
-                    .data
-                    .range(range)
-                    .map(|(_, result)| then(result))
-                    .collect();
-                if results.is_empty() {
-                    None
-                } else {
-                    Some(results)
-                }
-            }
-        })
-        .unwrap_or(None)
-    }
-
     /// Applies a function to the values corresponding to the key, and returns the result alongside
     /// the meta information.
     ///
@@ -288,30 +262,33 @@ where
         .unwrap_or(None)
     }
 
-    /// Get meta and range query.
-    pub fn meta_get_range_and<Q: ?Sized, F, T, R>(&self, range: R, then: F) -> Option<(Option<Vec<T>>, M)>
+    /// Get meta and range query. First checks that the underlying interval tree contains
+    /// the queried `range`. If not, it returns the subintervals missings.
+    pub fn meta_get_range_and<F, T, R>(&self, range: R, then: F) -> RangeLookup<K, T, M>
     where
         F: Fn(&[V]) -> T,
-        K: Borrow<Q>,
-        R: RangeBounds<Q>,
-        Q: Ord,
+        K: Ord,
+        R: RangeBounds<K>
     {
         self.with_handle(move |inner| {
             if !inner.is_ready() {
-                None
+                RangeLookup::Err
             } else {
+                // Lookup tree first.
+                let range = (range.start_bound().cloned(), range.end_bound().cloned());
+                let diff = inner.tree.get_interval_difference(range.clone());
+                if !diff.is_empty() {
+                    return RangeLookup::Miss(diff);
+                }
+
                 let res : Vec<T> = inner.data
                 .range(range)
                 .map(|(_, result)| then(result))
                 .collect();
 
-                    
-                let res = if res.is_empty() { None } else { Some(res) };
-                let res = (res, inner.meta.clone());
-                Some(res)
+                RangeLookup::Ok(res, inner.meta.clone())
             }
-        })
-        .unwrap_or(None)
+        }).unwrap()
     }
 
     /// If the writer has destroyed this map, this method will return true.

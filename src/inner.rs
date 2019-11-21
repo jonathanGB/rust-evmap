@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use unbounded_interval_tree::IntervalTree;
 
 #[cfg(not(feature = "smallvec"))]
 pub(crate) type Values<T> = Vec<T>;
@@ -8,22 +9,24 @@ pub(crate) type Values<T> = smallvec::SmallVec<[T; 1]>;
 
 pub(crate) struct Inner<K, V, M>
 where
-    K: Ord,
+    K: Ord + Clone,
 {
     pub(crate) data: BTreeMap<K, Values<V>>,
+    pub(crate) tree: IntervalTree<K>,
     pub(crate) meta: M,
     ready: bool,
 }
 
 impl<K, V, M> Clone for Inner<K, V, M>
 where
-    K: Ord,
+    K: Ord + Clone,
     M: Clone,
 {
     fn clone(&self) -> Self {
         assert!(self.data.is_empty());
         Inner {
             data: BTreeMap::new(),
+            tree: IntervalTree::default(),
             meta: self.meta.clone(),
             ready: self.ready,
         }
@@ -32,11 +35,12 @@ where
 
 impl<K, V, M> Inner<K, V, M>
 where
-    K: Ord,
+    K: Ord + Clone,
 {
     pub fn with_meta(m: M) -> Self {
         Inner {
             data: BTreeMap::default(),
+            tree: IntervalTree::default(),
             meta: m,
             ready: false,
         }

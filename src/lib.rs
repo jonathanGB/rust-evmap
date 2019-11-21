@@ -199,7 +199,10 @@
 //! in the `evmap` dependency entry, and `Vec` will always be used internally.
 #![deny(missing_docs)]
 
+#![feature(bound_cloned)]
+
 use std::fmt;
+use std::ops::Bound;
 use std::sync::{atomic, Arc, Mutex};
 
 mod inner;
@@ -250,6 +253,8 @@ pub enum Operation<K, V> {
     Replace(K, V),
     /// Add this value to the set of entries for this key.
     Add(K, V),
+    /// Add a list of values for the range of keys.
+    AddRange(Vec<(K,V)>, (Bound<K>, Bound<K>)),
     /// Remove this value from the set of entries for this key.
     Remove(K, V),
     /// Remove the value set for this key.
@@ -368,6 +373,46 @@ where
     M: 'static + Clone,
 {
     Options::default().with_meta(meta).construct()
+}
+
+#[derive(Debug)]
+/// Variants of a range lookup into the evmap.
+pub enum RangeLookup<K, V, M> {
+    /// Error, if the evmap is not ready.
+    Err,
+    /// When a requested interval lookup is missing some subintervals
+    /// in its internal interval tree in order to answer correctly to
+    /// the lookup. 
+    Miss(Vec<(Bound<K>, Bound<K>)>),
+    /// When a range lookup is correctly fullfiled, we returned the list
+    /// of records and the metadata related to it.
+    Ok(Vec<V>, M),
+}
+
+impl<K,V,M> RangeLookup<K,V,M> {
+    /// Helper to determine if the `RangeLookup` is an `Err` variant.
+    pub fn is_err(&self) -> bool {
+        match self {
+            RangeLookup::Err => true,
+            _ => false,
+        }
+    }
+
+    /// Helper to determine if the `RangeLookup` is a `Miss` variant.
+    pub fn is_miss(&self) -> bool {
+        match self {
+            RangeLookup::Miss(..) => true,
+            _ => false,
+        }
+    }
+
+    /// Helper to determine if the `RangeLookup` is an `Ok` variant.
+    pub fn is_ok(&self) -> bool {
+        match self {
+            RangeLookup::Ok(..) => true,
+            _ => false,
+        }
+    }
 }
 
 // test that ReadHandle isn't Sync

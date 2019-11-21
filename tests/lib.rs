@@ -1,4 +1,5 @@
 extern crate evmap;
+use evmap::RangeLookup;
 
 #[test]
 fn it_works() {
@@ -469,18 +470,34 @@ fn retain() {
 }
 
 #[test]
-fn range() {
+fn range_works() {
+    use std::ops::Bound::{Included, Unbounded};
+
     let (r, mut w) = evmap::new();
 
-    for i in 0..50 {
-        w.insert(i, i);
-    }
-
-    assert_eq!(r.get_range(10..20, |result| result.len()), None);
+    assert!(r.meta_get_range_and(3..4, |rs| rs.len()).is_err());
 
     w.refresh();
 
-    let results = r.get_range(20..30, |result| result.len()).unwrap();
-    assert_eq!(results.len(), 10);
-    assert_eq!(results, vec![1; 10]);
-}
+    w.insert_range(vec![(3, 9), (3, 30), (4, 10)],  (Included(2), Unbounded));
+
+    assert!(r.meta_get_range_and(3..4, |rs| rs.len()).is_miss());
+
+    w.refresh();
+
+    match r.meta_get_range_and(3..4, |rs| rs.to_vec()) {
+        RangeLookup::Ok(results, _) => {
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0], vec![9, 30]);
+        }
+        _ => unreachable!()
+    }
+
+    match r.meta_get_range_and(3..=4, |rs| rs.to_vec()) {
+        RangeLookup::Ok(results, _) => {
+            assert_eq!(results.len(), 2);
+            assert_eq!(results[0], vec![9, 30]);
+            assert_eq!(results[1], vec![10]);
+        }
+        _ => unreachable!()
+    }}
