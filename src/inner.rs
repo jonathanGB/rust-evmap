@@ -26,7 +26,7 @@ where
         assert!(self.data.is_empty());
         Inner {
             data: BTreeMap::new(),
-            tree: IntervalTree::default(),
+            tree: self.tree.clone(),
             meta: self.meta.clone(),
             ready: self.ready,
         }

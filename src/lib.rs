@@ -304,12 +304,14 @@ pub use crate::shallow_copy::ShallowCopy;
 pub struct Options<M>
 {
     meta: M,
+    ignore_interval_tree: bool,
 }
 
 impl Default for Options<()> {
     fn default() -> Self {
         Options {
             meta: (),
+            ignore_interval_tree: true,
         }
     }
 }
@@ -320,7 +322,14 @@ impl<M> Options<M>
     pub fn with_meta<M2>(self, meta: M2) -> Options<M2> {
         Options {
             meta,
+            ignore_interval_tree: self.ignore_interval_tree,
         }
+    }
+
+    /// Set whether or not to ignore the underlying interval tree.
+    /// By default, the tree is ignored during lookups.
+    pub fn set_ignore_interval_tree(&mut self, ignore_interval_tree: bool) {
+        self.ignore_interval_tree = ignore_interval_tree;
     }
 
     /// Create the map, and construct the read and write handles used to access it.
@@ -332,7 +341,11 @@ impl<M> Options<M>
         M: 'static + Clone,
     {
         let epochs = Default::default();
-        let inner = Inner::with_meta(self.meta);
+        let mut inner = Inner::with_meta(self.meta);
+        if self.ignore_interval_tree {
+            use std::ops::Bound::Unbounded;
+            inner.tree.insert((Unbounded, Unbounded));
+        }
 
         let mut w_handle = inner.clone();
         w_handle.mark_ready();

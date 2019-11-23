@@ -1,5 +1,4 @@
 extern crate evmap;
-use evmap::RangeLookup;
 
 #[test]
 fn it_works() {
@@ -494,9 +493,13 @@ fn retain() {
 
 #[test]
 fn range_works() {
+    use evmap::RangeLookup;
+    use evmap::Options;
     use std::ops::Bound::{Included, Unbounded};
 
-    let (r, mut w) = evmap::new();
+    let mut evmap_options = Options::default();
+    evmap_options.set_ignore_interval_tree(false);
+    let (r, mut w) = evmap_options.construct();
 
     assert!(r.meta_get_range_and(3..4, |rs| rs.len()).is_err());
 
