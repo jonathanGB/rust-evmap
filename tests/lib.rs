@@ -505,7 +505,7 @@ fn range_works() {
 
     w.refresh();
 
-    w.insert_range(vec![(3, 9), (3, 30), (4, 10)],  (Included(2), Unbounded));
+    w.insert_range(vec![(3, 9), (3, 30), (4, 10)],  vec![(Included(2), Unbounded)]);
 
     assert!(r.meta_get_range_and(3..4, |rs| rs.len()).is_miss());
 

@@ -254,7 +254,7 @@ pub enum Operation<K, V> {
     /// Add this value to the set of entries for this key.
     Add(K, V),
     /// Add a list of values for the range of keys.
-    AddRange(Vec<(K,V)>, (Bound<K>, Bound<K>)),
+    AddRange(Vec<(K,V)>, Vec<(Bound<K>, Bound<K>)>),
     /// Remove this value from the set of entries for this key.
     Remove(K, V),
     /// Remove the value set for this key.

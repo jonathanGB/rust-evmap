@@ -374,8 +374,14 @@ where
     /// of which intervals are covered by the evmap.
     /// 
     /// The update value-set will only be visible to readers after the next call to `refresh()`.
-    pub fn insert_range(&mut self, records: Vec<(K,V)>, range: (Bound<K>, Bound<K>)) -> &mut Self {
-        self.add_op(Operation::AddRange(records, range))
+    pub fn insert_range<I,J>(&mut self, records: I, ranges: J) -> &mut Self
+    where
+        I: IntoIterator<Item = (K,V)>,
+        J: IntoIterator<Item = (Bound<K>, Bound<K>)>,
+    {
+        self.add_op(Operation::AddRange(
+            records.into_iter().collect(),
+            ranges.into_iter().collect()))
     }
 
     /// Replace the value-set of the given key with the given value.
@@ -535,7 +541,7 @@ where
                     .or_insert_with(Values::new)
                     .push(unsafe { value.shallow_copy() });
             }
-            Operation::AddRange(ref mut records, ref range) => {
+            Operation::AddRange(ref mut records, ref ranges) => {
                 for (ref key, value) in records {
                     inner
                         .data
@@ -544,7 +550,9 @@ where
                         .push(unsafe { value.shallow_copy() });
                 }
 
-                inner.tree.insert(range.clone());
+                for range in ranges {
+                    inner.tree.insert(range.clone());
+                }
             }
             Operation::Empty(ref key) => {
                 #[cfg(not(feature = "indexed"))]
@@ -658,7 +666,7 @@ where
                     .or_insert_with(Values::new)
                     .push(value);
             }
-            Operation::AddRange(records, range) => {
+            Operation::AddRange(records, ranges) => {
                 for (key, value) in records {
                     inner
                         .data
@@ -667,7 +675,9 @@ where
                         .push(value);
                 }
 
-                inner.tree.insert(range);
+                for range in ranges {
+                    inner.tree.insert(range);
+                }
             }
             Operation::Empty(key) => {
                 #[cfg(not(feature = "indexed"))]
