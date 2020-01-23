@@ -262,6 +262,8 @@ pub enum Operation<K, V> {
     #[cfg(feature = "indexed")]
     /// Drop a key at a random index
     EmptyRandom(usize),
+    /// Drop the key(s) within a random range
+    EmptyRandomRange,
     /// Remove all values in the value set for this key.
     Clear(K),
     /// Remove all values for all keys.

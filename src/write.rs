@@ -507,6 +507,15 @@ where
         unsafe { (*inner).data.get_index(index) }.map(|(k, vs)| (k, &vs[..]))
     }
 
+    /// Remove all value-sets for a random range.
+    /// 
+    /// The value-sets will only disappear from readers after the next call to `refresh()`.
+    pub fn empty_random_range(&mut self) {
+        self.add_op(Operation::EmptyRandomRange);
+
+        // TODO(jonathangb): More to do? Maybe return the records removed?
+    }
+
     /// Apply ops in such a way that no values are dropped, only forgotten
     fn apply_first(inner: &mut Inner<K, V, M>, op: &mut Operation<K, V>) {
         match *op {
@@ -582,6 +591,21 @@ where
                     // don't run destructors yet -- still in use by other map
                     unsafe {
                         vs.set_len(0);
+                    }
+                }
+            }
+            Operation::EmptyRandomRange => {
+                if let Some(deleted_range) = inner.tree.remove_random_leaf() {
+                    let to_delete : Vec<_> = inner.data.range(deleted_range)
+                        .map(|(key, _)| key.clone()).collect();
+                    
+                    for ref key in to_delete {
+                        if let Some(mut vs) = inner.data.remove(key) {
+                            // don't run destructors yet -- still in use by other map
+                            unsafe {
+                                vs.set_len(0);
+                            }
+                        }
                     }
                 }
             }
@@ -691,6 +715,16 @@ where
             #[cfg(feature = "indexed")]
             Operation::EmptyRandom(index) => {
                 inner.data.swap_remove_index(index);
+            }
+            Operation::EmptyRandomRange => {
+                if let Some(deleted_range) = inner.tree.remove_random_leaf() {
+                    let to_delete : Vec<_> = inner.data.range(deleted_range)
+                        .map(|(key, _)| key.clone()).collect();
+                    
+                    for ref key in to_delete {
+                        inner.data.remove(key);
+                    }
+                }
             }
             Operation::Remove(key, value) => {
                 if let Some(e) = inner.data.get_mut(&key) {
