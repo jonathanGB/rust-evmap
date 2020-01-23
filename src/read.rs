@@ -281,7 +281,9 @@ where
             } else {
                 // Lookup tree first.
                 let range = (range.start_bound().cloned(), range.end_bound().cloned());
-                let diff = inner.tree.get_interval_difference(range.clone());
+                let diff = inner.tree.as_ref()
+                    .expect("Can't ignore the interval tree with range queries")
+                    .get_interval_difference(range.clone());
                 if !diff.is_empty() {
                     return RangeLookup::Miss(diff);
                 }

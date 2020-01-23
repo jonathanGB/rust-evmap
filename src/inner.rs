@@ -12,7 +12,7 @@ where
     K: Ord + Clone,
 {
     pub(crate) data: BTreeMap<K, Values<V>>,
-    pub(crate) tree: IntervalTree<K>,
+    pub(crate) tree: Option<IntervalTree<K>>,
     pub(crate) meta: M,
     ready: bool,
 }
@@ -40,7 +40,7 @@ where
     pub fn with_meta(m: M) -> Self {
         Inner {
             data: BTreeMap::default(),
-            tree: IntervalTree::default(),
+            tree: Some(IntervalTree::default()),
             meta: m,
             ready: false,
         }

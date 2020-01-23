@@ -423,7 +423,7 @@ where
         self.add_op(Operation::Empty(k))
     }
 
-    /// Purge all value-sets from the map.
+    /// Purge all value-sets from the map, and of the underlying interval tree.
     ///
     /// The map will only appear empty to readers after the next call to `refresh()`.
     ///
@@ -559,8 +559,10 @@ where
                         .push(unsafe { value.shallow_copy() });
                 }
 
+                let tree = inner.tree.as_mut()
+                    .expect("Can't ignore the interval tree with range queries");
                 for range in ranges {
-                    inner.tree.insert(range.clone());
+                    tree.insert(range.clone());
                 }
             }
             Operation::Empty(ref key) => {
@@ -582,8 +584,11 @@ where
                         vs.set_len(0);
                     }
                 }
-                // then, empty the map
+                // Then, empty the map, and possibly the tree.
                 inner.data.clear();
+                if let Some(ref mut tree) = inner.tree {
+                    tree.clear();
+                } 
             }
             #[cfg(feature = "indexed")]
             Operation::EmptyRandom(index) => {
@@ -595,7 +600,9 @@ where
                 }
             }
             Operation::EmptyRandomRange => {
-                if let Some(deleted_range) = inner.tree.remove_random_leaf() {
+                if let Some(deleted_range) = inner.tree.as_mut()
+                    .expect("Can't ignore the interval tree with range queries")
+                    .remove_random_leaf() {
                     let to_delete : Vec<_> = inner.data.range(deleted_range)
                         .map(|(key, _)| key.clone()).collect();
                     
@@ -699,8 +706,10 @@ where
                         .push(value);
                 }
 
+                let tree = inner.tree.as_mut()
+                    .expect("Can't ignore the interval tree with range queries");
                 for range in ranges {
-                    inner.tree.insert(range);
+                    tree.insert(range);
                 }
             }
             Operation::Empty(key) => {
@@ -711,13 +720,18 @@ where
             }
             Operation::Purge => {
                 inner.data.clear();
+                if let Some(ref mut tree) = inner.tree {
+                    tree.clear();
+                }
             }
             #[cfg(feature = "indexed")]
             Operation::EmptyRandom(index) => {
                 inner.data.swap_remove_index(index);
             }
             Operation::EmptyRandomRange => {
-                if let Some(deleted_range) = inner.tree.remove_random_leaf() {
+                if let Some(deleted_range) = inner.tree.as_mut()
+                    .expect("Can't ignore the interval tree with range queries")
+                    .remove_random_leaf() {
                     let to_delete : Vec<_> = inner.data.range(deleted_range)
                         .map(|(key, _)| key.clone()).collect();
                     

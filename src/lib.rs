@@ -345,8 +345,7 @@ impl<M> Options<M>
         let epochs = Default::default();
         let mut inner = Inner::with_meta(self.meta);
         if self.ignore_interval_tree {
-            use std::ops::Bound::Unbounded;
-            inner.tree.insert((Unbounded, Unbounded));
+            inner.tree = None;
         }
 
         let mut w_handle = inner.clone();
